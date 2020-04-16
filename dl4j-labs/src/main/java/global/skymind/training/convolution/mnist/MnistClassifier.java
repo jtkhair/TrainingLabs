@@ -55,6 +55,8 @@ import org.nd4j.evaluation.classification.Evaluation;
 import org.nd4j.linalg.activations.Activation;
 import org.nd4j.linalg.api.ndarray.INDArray;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
+import org.nd4j.linalg.factory.Nd4j;
+import org.nd4j.linalg.learning.config.Adam;
 import org.nd4j.linalg.learning.config.Nesterovs;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
 import org.slf4j.Logger;
@@ -84,12 +86,12 @@ public class MnistClassifier extends Application {
     private static final int width = 28;
     private static final int channels = 1; // single channel for grayscale images
     private static final int outputNum = 10; // 10 digits classification
-    private static final int batchSize = 54;
+    private static final int batchSize = 32;
     private static final int nEpochs = 1;
-    private static final double learningRate = 0.001;
+    private static final double learningRate = 1e-4;
     private static MultiLayerNetwork model = null;
 
-    private static final int seed = 1234;
+    private static final int seed = 123;
 
     public static void main(String[] args) throws Exception
     {
@@ -108,8 +110,10 @@ public class MnistClassifier extends Application {
         log.info("Network configuration and training...");
 
         MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
+                .cudnnAlgoMode(ConvolutionLayer.AlgoMode.NO_WORKSPACE)
                 .seed(seed)
-                .updater(new Nesterovs(learningRate, Nesterovs.DEFAULT_NESTEROV_MOMENTUM))
+                .l2(0.0005)
+                .updater(new Adam(learningRate))
                 .weightInit(WeightInit.XAVIER)
                 .list()
                 .layer(0, new ConvolutionLayer.Builder(5, 5)
@@ -122,7 +126,7 @@ public class MnistClassifier extends Application {
                         .kernelSize(2, 2)
                         .stride(2, 2)
                         .build())
-                .layer(2, new DenseLayer.Builder().activation(Activation.RELU)
+                .layer(2, new DenseLayer.Builder().activation(Activation.LEAKYRELU)
                         .nOut(50).build())
                 .layer(3, new OutputLayer.Builder(LossFunctions.LossFunction.NEGATIVELOGLIKELIHOOD)
                         .nOut(outputNum)
@@ -135,6 +139,8 @@ public class MnistClassifier extends Application {
         model = new MultiLayerNetwork(conf);
         model.init();
         model.setListeners(new ScoreIterationListener(10));
+
+        Nd4j.getMemoryManager().togglePeriodicGc(false);
 
         // evaluation while training (the score should go down)
         for (int i = 0; i < nEpochs; i++) {
